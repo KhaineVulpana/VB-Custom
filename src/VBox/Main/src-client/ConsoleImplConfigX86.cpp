@@ -696,6 +696,98 @@ int Console::i_configConstructorX86(PUVM pUVM, PVM pVM, PCVMMR3VTABLE pVMM, Auto
             InsertConfigInteger(pLeaf, "edx", uEdx);
         }
 
+        /* Optional: Mirror host CPUID brand/vendor strings via extradata toggles. */
+        {
+            Utf8Str sUseHostBrand, sUseHostVendor, sUseBoth;
+            bool fUseBrand  = false;
+            bool fUseVendor = false;
+            GetExtraDataBoth(virtualBox, pMachine, "VBoxInternal2/CPUID/UseHostBrand", &sUseHostBrand);
+            GetExtraDataBoth(virtualBox, pMachine, "VBoxInternal2/CPUID/UseHostVendor", &sUseHostVendor);
+            GetExtraDataBoth(virtualBox, pMachine, "VBoxInternal2/CPUID/UseHostVendorBrand", &sUseBoth);
+            if (sUseHostBrand.isNotEmpty() && sUseHostBrand != "0")
+                fUseBrand = true;
+            if (sUseHostVendor.isNotEmpty() && sUseHostVendor != "0")
+                fUseVendor = true;
+            if (sUseBoth.isNotEmpty() && sUseBoth != "0")
+                fUseBrand = fUseVendor = true;
+
+            if (fUseBrand || fUseVendor)
+            {
+                ComPtr<IHost>    host;
+                ComPtr<IHostX86> hostX86;
+                hrc = virtualBox->COMGETTER(Host)(host.asOutParam());                           H();
+                hrc = host->COMGETTER(X86)(hostX86.asOutParam());                               H();
+
+                auto insert_leaf = [&](ULONG leaf, ULONG eax, ULONG ebx, ULONG ecx, ULONG edx)
+                {
+                    PCFGMNODE pLeaf;
+                    InsertConfigNode(pCPUM, Utf8StrFmt("HostCPUID/%RX32", leaf).c_str(), &pLeaf);
+                    InsertConfigInteger(pLeaf, "eax", eax);
+                    InsertConfigInteger(pLeaf, "ebx", ebx);
+                    InsertConfigInteger(pLeaf, "ecx", ecx);
+                    InsertConfigInteger(pLeaf, "edx", edx);
+                };
+
+                /* Brand string: 0x80000002..0x80000004 (if present), skip if already overridden. */
+                if (fUseBrand)
+                {
+                    ULONG eax=0, ebx=0, ecx=0, edx=0;
+                    ULONG maxExt=0, tmp=0;
+                    if (SUCCEEDED(hostX86->GetProcessorCPUIDLeaf(0, 0x80000000, 0, &maxExt, &tmp, &tmp, &tmp))
+                        && maxExt >= 0x80000004)
+                    {
+                        bool fHaveOverride = SUCCEEDED(platformX86->GetCPUIDLeaf(0x80000002, 0, &eax, &ebx, &ecx, &edx));
+                        if (!fHaveOverride)
+                        {
+                            for (ULONG leaf = 0x80000002; leaf <= 0x80000004; ++leaf)
+                            {
+                                ULONG la=0, lb=0, lc=0, ld=0;
+                                if (SUCCEEDED(hostX86->GetProcessorCPUIDLeaf(0, leaf, 0, &la, &lb, &lc, &ld)))
+                                    insert_leaf(leaf, la, lb, lc, ld);
+                            }
+                        }
+                    }
+                }
+
+                /* Vendor string: CPUID leaf 0. Note: overrides the max leaf value too. */
+                if (fUseVendor)
+                {
+                    ULONG eax=0, ebx=0, ecx=0, edx=0;
+                    bool fHaveOverride = SUCCEEDED(platformX86->GetCPUIDLeaf(0x00000000, 0, &eax, &ebx, &ecx, &edx));
+                    if (!fHaveOverride)
+                    {
+                        if (SUCCEEDED(hostX86->GetProcessorCPUIDLeaf(0, 0x00000000, 0, &eax, &ebx, &ecx, &edx)))
+                            insert_leaf(0x00000000, eax, ebx, ecx, edx);
+                    }
+                }
+            }
+        }
+
+        /* Optional: Hide hypervisor bit and vendor leaves for anti-detection. */
+        {
+            Utf8Str sHide;
+            GetExtraDataBoth(virtualBox, pMachine, "VBoxInternal2/CPUID/HideHypervisor", &sHide);
+            if (sHide.isNotEmpty() && sHide != "0")
+            {
+                ComPtr<IHost>    host;
+                ComPtr<IHostX86> hostX86;
+                hrc = virtualBox->COMGETTER(Host)(host.asOutParam());                           H();
+                hrc = host->COMGETTER(X86)(hostX86.asOutParam());                               H();
+
+                ULONG eax=0, ebx=0, ecx=0, edx=0;
+                if (SUCCEEDED(hostX86->GetProcessorCPUIDLeaf(0, 0x00000001, 0, &eax, &ebx, &ecx, &edx)))
+                {
+                    ecx &= ~RT_BIT_32(31); /* Clear hypervisor-present bit. */
+                    /* Persist an explicit override so CPUM uses this leaf. */
+                    hrc = platformX86->SetCPUIDLeaf(0x00000001, 0, eax, ebx, ecx, edx);         H();
+                }
+
+                /* Remove common hypervisor vendor leaves (0x40000000+). */
+                for (ULONG leaf = 0x40000000; leaf <= 0x40000010; ++leaf)
+                    platformX86->RemoveCPUIDLeaf(leaf, UINT32_MAX);
+            }
+        }
+
         /* We must limit CPUID count for Windows NT 4, as otherwise it stops
         with error 0x3e (MULTIPROCESSOR_CONFIGURATION_NOT_SUPPORTED). */
         if (osTypeId == GUEST_OS_ID_STR_X86("WindowsNT4"))

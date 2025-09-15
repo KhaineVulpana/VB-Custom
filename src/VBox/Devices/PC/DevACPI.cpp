@@ -46,6 +46,7 @@
 # include <iprt/alloc.h>
 # include <iprt/string.h>
 # include <iprt/uuid.h>
+# include <iprt/system.h>
 #endif /* IN_RING3 */
 #ifdef VBOX_WITH_IOMMU_AMD
 # include <VBox/iommu-amd.h>
@@ -4645,6 +4646,28 @@ static DECLCALLBACK(int) acpiR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFG
         return PDMDEV_SET_ERROR(pDevIns, rc, N_("Configuration error: \"AcpiOemId\" must contain not more than 6 characters"));
     memset(pThis->au8OemId, ' ', sizeof(pThis->au8OemId));
     memcpy(pThis->au8OemId, szOemId, cchOemId);
+
+    /* Optionally derive OEM ID from host manufacturer. */
+    uint8_t fUseHostOemId = 0;
+    rc = pHlp->pfnCFGMQueryU8Def(pCfg, "AcpiUseHostOemId", &fUseHostOemId, 0);
+    if (RT_SUCCESS(rc) && fUseHostOemId)
+    {
+# ifdef IN_RING3
+        char szManuf[64];
+        if (RT_SUCCESS(RTSystemQueryDmiString(RTSYSDMISTR_MANUFACTURER, szManuf, sizeof(szManuf))))
+        {
+            /* Uppercase and copy first up to 6 chars, pad with spaces. */
+            memset(pThis->au8OemId, ' ', sizeof(pThis->au8OemId));
+            size_t cch = RT_MIN((size_t)6, strlen(szManuf));
+            for (size_t i = 0; i < cch; ++i)
+            {
+                char ch = szManuf[i];
+                if (ch >= 'a' && ch <= 'z') ch = (char)(ch - 'a' + 'A');
+                pThis->au8OemId[i] = (uint8_t)ch;
+            }
+        }
+# endif /* IN_RING3 */
+    }
 
     char szCreatorId[16];
     rc = pHlp->pfnCFGMQueryStringDef(pCfg, "AcpiCreatorId", szCreatorId, sizeof(szCreatorId), "ASL ");

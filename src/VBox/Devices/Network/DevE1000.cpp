@@ -8854,6 +8854,7 @@ static DECLCALLBACK(int) e1kR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFGM
     PDMDEV_CHECK_VERSIONS_RETURN(pDevIns);
     PE1KSTATE   pThis   = PDMDEVINS_2_DATA(pDevIns, PE1KSTATE);
     PE1KSTATECC pThisCC = PDMDEVINS_2_DATA_CC(pDevIns, PE1KSTATECC);
+    PCPDMDEVHLPR3 pHlp  = pDevIns->pHlpR3;
     int         rc;
 
     /*
@@ -9027,6 +9028,19 @@ static DECLCALLBACK(int) e1kR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFGM
     if (pThis->eChip != E1K_CHIP_82583V)
     {
         e1kR3ConfigurePciDev(pDevIns->apPciDevs[0], pThis->eChip);
+        /* Optional PCI ID overrides for experimentation. */
+        uint16_t u16VendorId = g_aChips[pThis->eChip].uPCIVendorId;
+        uint16_t u16DeviceId = g_aChips[pThis->eChip].uPCIDeviceId;
+        uint16_t u16SubVendorId = g_aChips[pThis->eChip].uPCISubsystemVendorId;
+        uint16_t u16SubDeviceId = g_aChips[pThis->eChip].uPCISubsystemId;
+        pHlp->pfnCFGMQueryU16Def(pCfg, "PciVendorId", &u16VendorId, u16VendorId);
+        pHlp->pfnCFGMQueryU16Def(pCfg, "PciDeviceId", &u16DeviceId, u16DeviceId);
+        PDMPciDevSetVendorId(pDevIns->apPciDevs[0], u16VendorId);
+        PDMPciDevSetDeviceId(pDevIns->apPciDevs[0], u16DeviceId);
+        pHlp->pfnCFGMQueryU16Def(pCfg, "PciSubVendorId", &u16SubVendorId, u16SubVendorId);
+        pHlp->pfnCFGMQueryU16Def(pCfg, "PciSubDeviceId", &u16SubDeviceId, u16SubDeviceId);
+        PDMPciDevSetSubSystemVendorId(pDevIns->apPciDevs[0], u16SubVendorId);
+        PDMPciDevSetSubSystemId(pDevIns->apPciDevs[0], u16SubDeviceId);
         rc = PDMDevHlpPCIRegister(pDevIns, pDevIns->apPciDevs[0]);
         AssertRCReturn(rc, rc);
 
@@ -9046,6 +9060,19 @@ static DECLCALLBACK(int) e1kR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFGM
         PDMMSIREG MsiReg;
 
         e1eR3ConfigurePciDev82583(pDevIns->apPciDevs[0], &MsiReg, pThis->eChip);
+        /* Optional PCI ID overrides for experimentation (82583V path). */
+        uint16_t u16VendorId = g_aChips[pThis->eChip].uPCIVendorId;
+        uint16_t u16DeviceId = g_aChips[pThis->eChip].uPCIDeviceId;
+        uint16_t u16SubVendorId = g_aChips[pThis->eChip].uPCISubsystemVendorId;
+        uint16_t u16SubDeviceId = g_aChips[pThis->eChip].uPCISubsystemId;
+        pHlp->pfnCFGMQueryU16Def(pCfg, "PciVendorId", &u16VendorId, u16VendorId);
+        pHlp->pfnCFGMQueryU16Def(pCfg, "PciDeviceId", &u16DeviceId, u16DeviceId);
+        PDMPciDevSetVendorId(pDevIns->apPciDevs[0], u16VendorId);
+        PDMPciDevSetDeviceId(pDevIns->apPciDevs[0], u16DeviceId);
+        pHlp->pfnCFGMQueryU16Def(pCfg, "PciSubVendorId", &u16SubVendorId, u16SubVendorId);
+        pHlp->pfnCFGMQueryU16Def(pCfg, "PciSubDeviceId", &u16SubDeviceId, u16SubDeviceId);
+        PDMPciDevSetSubSystemVendorId(pDevIns->apPciDevs[0], u16SubVendorId);
+        PDMPciDevSetSubSystemId(pDevIns->apPciDevs[0], u16SubDeviceId);
         rc = PDMDevHlpPCIRegister(pDevIns, pDevIns->apPciDevs[0]);
         AssertRCReturn(rc, rc);
 

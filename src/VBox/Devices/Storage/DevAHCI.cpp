@@ -5761,8 +5761,13 @@ static DECLCALLBACK(int) ahciR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFG
     PPDMPCIDEV pPciDev = pDevIns->apPciDevs[0];
     PDMPCIDEV_ASSERT_VALID(pDevIns, pPciDev);
 
-    PDMPciDevSetVendorId(pPciDev,          0x8086); /* Intel */
-    PDMPciDevSetDeviceId(pPciDev,          0x2829); /* ICH-8M */
+    /* Allow overriding PCI IDs via config for experimentation. */
+    uint16_t u16VendorId = 0x8086; /* Intel */
+    uint16_t u16DeviceId = 0x2829; /* ICH-8M */
+    pHlp->pfnCFGMQueryU16Def(pCfg, "PciVendorId", &u16VendorId, u16VendorId);
+    pHlp->pfnCFGMQueryU16Def(pCfg, "PciDeviceId", &u16DeviceId, u16DeviceId);
+    PDMPciDevSetVendorId(pPciDev,          u16VendorId);
+    PDMPciDevSetDeviceId(pPciDev,          u16DeviceId);
     PDMPciDevSetCommand(pPciDev,           0x0000);
 #ifdef VBOX_WITH_MSI_DEVICES
     PDMPciDevSetStatus(pPciDev,            VBOX_PCI_STATUS_CAP_LIST);

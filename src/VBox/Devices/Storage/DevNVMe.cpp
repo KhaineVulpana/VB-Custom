@@ -7301,8 +7301,20 @@ static DECLCALLBACK(int) nvmeR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFG
     PPDMPCIDEV pPciDev = pDevIns->apPciDevs[0];
     PDMPCIDEV_ASSERT_VALID(pDevIns, pPciDev);
 
-    PDMPciDevSetVendorId(pPciDev,       NVME_PCI_VENDOR_ID); /* Oracle Corporation */
-    PDMPciDevSetDeviceId(pPciDev,       0x4e56); /* "NV" */
+    /* Optional PCI ID overrides for experimentation. */
+    PCPDMDEVHLPR3 pHlp = pDevIns->pHlpR3;
+    uint16_t u16VendorId = NVME_PCI_VENDOR_ID;
+    uint16_t u16DeviceId = 0x4e56; /* "NV" */
+    uint16_t u16SubVendorId = NVME_PCI_VENDOR_ID;
+    uint16_t u16SubDeviceId = 0x0001; /* arbitrary default */
+    pHlp->pfnCFGMQueryU16Def(pDevIns->pCfg, "PciVendorId",     &u16VendorId,  u16VendorId);
+    pHlp->pfnCFGMQueryU16Def(pDevIns->pCfg, "PciDeviceId",     &u16DeviceId,  u16DeviceId);
+    pHlp->pfnCFGMQueryU16Def(pDevIns->pCfg, "PciSubVendorId",  &u16SubVendorId, u16SubVendorId);
+    pHlp->pfnCFGMQueryU16Def(pDevIns->pCfg, "PciSubDeviceId",  &u16SubDeviceId, u16SubDeviceId);
+    PDMPciDevSetVendorId(pPciDev,       u16VendorId);
+    PDMPciDevSetDeviceId(pPciDev,       u16DeviceId);
+    PDMPciDevSetSubSystemVendorId(pPciDev, u16SubVendorId);
+    PDMPciDevSetSubSystemId(pPciDev,       u16SubDeviceId);
     PDMPciDevSetCommand(pPciDev,        0x0000);
 #ifdef VBOX_WITH_MSI_DEVICES
     PDMPciDevSetStatus(pPciDev,         VBOX_PCI_STATUS_CAP_LIST);
@@ -7646,4 +7658,3 @@ const PDMDEVREG g_DeviceNVMe =
 };
 
 #endif /* !VBOX_DEVICE_STRUCT_TESTCASE */
-

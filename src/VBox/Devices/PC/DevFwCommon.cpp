@@ -98,6 +98,10 @@ static const char   *g_pszDefDmiProcVersion     = "Pentium(R) III";
 static       char    g_szHostDmiSystemProduct[64];
 /** The host DMI system version value, for DmiUseHostInfo=1. */
 static       char    g_szHostDmiSystemVersion[64];
+/** The host DMI system vendor value, for DmiUseHostInfo=1. */
+static       char    g_szHostDmiSystemVendor[64];
+/** The host DMI system serial value, for DmiUseHostInfo=1. */
+static       char    g_szHostDmiSystemSerial[64];
 
 
 /*********************************************************************************************************************************
@@ -429,6 +433,22 @@ static void fwCommonUseHostDMIStrings(void)
     {
         g_pszDefDmiSystemVersion = g_szHostDmiSystemVersion;
         LogRel(("DMI: Using DmiSystemVersion from host: %s\n", g_szHostDmiSystemVersion));
+    }
+
+    rc = RTSystemQueryDmiString(RTSYSDMISTR_MANUFACTURER,
+                                g_szHostDmiSystemVendor, sizeof(g_szHostDmiSystemVendor));
+    if (RT_SUCCESS(rc))
+    {
+        g_pszDefDmiSystemVendor = g_szHostDmiSystemVendor;
+        LogRel(("DMI: Using DmiSystemVendor from host: %s\n", g_szHostDmiSystemVendor));
+    }
+
+    rc = RTSystemQueryDmiString(RTSYSDMISTR_PRODUCT_SERIAL,
+                                g_szHostDmiSystemSerial, sizeof(g_szHostDmiSystemSerial));
+    if (RT_SUCCESS(rc))
+    {
+        g_pszDefDmiSystemSerial = g_szHostDmiSystemSerial;
+        LogRel(("DMI: Using DmiSystemSerial from host: %s\n", g_szHostDmiSystemSerial));
     }
 }
 
@@ -1276,4 +1296,3 @@ void FwCommonPlantMpsFloatPtr(PPDMDEVINS pDevIns, uint32_t u32MpTableAddr)
     floatPtr.u8Checksum            = fwCommonChecksum((uint8_t*)&floatPtr, 16);
     PDMDevHlpPhysWrite(pDevIns, 0x9fff0, &floatPtr, 16);
 }
-
