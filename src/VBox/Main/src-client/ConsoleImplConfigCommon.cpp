@@ -3971,6 +3971,18 @@ int Console::i_configVmmDev(ComPtr<IMachine> pMachine, BusAssignmentManager *pBu
     PCFGMNODE pLunL0 = NULL;        /* /Devices/Dev/0/LUN#0/ */
 
     /*
+     * Optional stealth: allow disabling the VMMDev device entirely.
+     */
+    {
+        ComPtr<IVirtualBox> virtualBox;
+        HRESULT hrc = pMachine->COMGETTER(Parent)(virtualBox.asOutParam()); H();
+        Utf8Str sDisable;
+        GetExtraDataBoth(virtualBox, pMachine, "VBoxInternal2/Stealth/DisableVMMDev", &sDisable);
+        if (sDisable.isNotEmpty() && sDisable != "0")
+            return VINF_SUCCESS; /* Skip creating VMMDev. */
+    }
+
+    /*
      * VMM Device
      */
     InsertConfigNode(pDevices, "VMMDev", &pDev);
@@ -5133,9 +5145,19 @@ int Console::i_configGraphicsController(PCFGMNODE pDevices,
 
         i_attachStatusDriver(pInst, DeviceType_Graphics3D);
 
+        /* Optional stealth: force std VGA and suppress SVGA IDs if requested. */
+        bool fForceStdVga = false;
+        {
+            ComPtr<IVirtualBox> vb;
+            HRESULT hrc2 = ptrMachine->COMGETTER(Parent)(vb.asOutParam()); H();
+            Utf8Str s;
+            GetExtraDataBoth(vb, ptrMachine, "VBoxInternal2/Stealth/ForceStdVGA", &s);
+            fForceStdVga = s.isNotEmpty() && s != "0";
+        }
+
 #ifdef VBOX_WITH_VMSVGA
-        if (   enmGraphicsController == GraphicsControllerType_VMSVGA
-            || enmGraphicsController == GraphicsControllerType_VBoxSVGA)
+        if (!fForceStdVga && (   enmGraphicsController == GraphicsControllerType_VMSVGA
+            || enmGraphicsController == GraphicsControllerType_VBoxSVGA))
         {
             InsertConfigInteger(pCfg, "VMSVGAEnabled", true);
             if (enmGraphicsController == GraphicsControllerType_VMSVGA)
@@ -5151,6 +5173,14 @@ int Console::i_configGraphicsController(PCFGMNODE pDevices,
 
             InsertConfigInteger(pCfg, "VmSvga3", fForceVmSvga3);
             InsertConfigInteger(pCfg, "VmSvgaExposeLegacyVga", fExposeLegacyVga);
+        }
+        else if (fForceStdVga)
+        {
+            /* Explicitly ensure SVGA is off and VGA path is used. */
+            InsertConfigInteger(pCfg, "VMSVGAEnabled", false);
+            InsertConfigInteger(pCfg, "VMSVGAPciId", false);
+            InsertConfigInteger(pCfg, "VmSvga3", false);
+            InsertConfigInteger(pCfg, "VmSvgaExposeLegacyVga", true);
         }
 #else
         RT_NOREF(enmGraphicsController, fForceVmSvga3, fExposeLegacyVga);

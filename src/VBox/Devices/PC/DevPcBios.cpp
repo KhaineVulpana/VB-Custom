@@ -1559,17 +1559,27 @@ static DECLCALLBACK(int)  pcbiosConstruct(PPDMDEVINS pDevIns, int iInstance, PCF
 
     /*
      * Register the I/O Ports.
+     * Optionally disable Bochs/VBox debug ports for stealth.
      */
-    IOMIOPORTHANDLE hIoPorts;
-    rc = PDMDevHlpIoPortCreateAndMap(pDevIns, 0x400 /*uPort*/, 4 /*cPorts*/, pcbiosIOPortDebugWrite, pcbiosIOPortDebugRead,
-                                     "Bochs PC BIOS - Panic & Debug", NULL, &hIoPorts);
-    AssertRCReturn(rc, rc);
+    {
+        uint8_t fEnableDbg = 0;
+        rc = pHlp->pfnCFGMQueryU8Def(pCfg, "EnableBiosDebugPorts", &fEnableDbg, 0);
+        if (RT_FAILURE(rc))
+            return PDMDEV_SET_ERROR(pDevIns, rc, N_("Configuration error: Querying \"EnableBiosDebugPorts\" as integer failed"));
+        if (fEnableDbg)
+        {
+            IOMIOPORTHANDLE hIoPorts;
+            rc = PDMDevHlpIoPortCreateAndMap(pDevIns, 0x400 /*uPort*/, 4 /*cPorts*/, pcbiosIOPortDebugWrite, pcbiosIOPortDebugRead,
+                                             "Bochs PC BIOS - Panic & Debug", NULL, &hIoPorts);
+            AssertRCReturn(rc, rc);
+        }
 
-    rc = PDMDevHlpIoPortCreateIsa(pDevIns, 1 /*cPorts*/, pcbiosIOPortControlWrite, pcbiosIOPortControlRead, NULL /*pvUser*/,
-                                  "PC BIOS - Control", NULL /*paExtDescs*/, &pThis->hIoPortControl);
-    AssertRCReturn(rc, rc);
-    rc = pcbiosRegisterControl(pDevIns, pThis, true /* fNewControlPort */);
-    AssertRCReturn(rc, rc);
+        rc = PDMDevHlpIoPortCreateIsa(pDevIns, 1 /*cPorts*/, pcbiosIOPortControlWrite, pcbiosIOPortControlRead, NULL /*pvUser*/,
+                                      "PC BIOS - Control", NULL /*paExtDescs*/, &pThis->hIoPortControl);
+        AssertRCReturn(rc, rc);
+        rc = pcbiosRegisterControl(pDevIns, pThis, true /* fNewControlPort */);
+        AssertRCReturn(rc, rc);
+    }
 
     /*
      * Register SSM handlers, for remembering which shutdown port to use.
@@ -2086,4 +2096,3 @@ const PDMDEVREG g_DevicePcBios =
 #endif
     /* .u32VersionEnd = */          PDM_DEVREG_VERSION
 };
-

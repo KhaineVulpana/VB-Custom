@@ -2904,8 +2904,13 @@ static void acpiR3PrepareHeader(PACPISTATE pThis, ACPITBLHEADER *header,
     header->u32Length             = RT_H2LE_U32(u32Length);
     header->u8Revision            = u8Revision;
     memcpy(header->au8OemId, pThis->au8OemId, 6);
-    memcpy(header->au8OemTabId, "VBOX", 4);
-    memcpy(header->au8OemTabId+4, au8Signature, 4);
+    if (pThis->au8OemTabId[0])
+        memcpy(header->au8OemTabId, pThis->au8OemTabId, 8);
+    else
+    {
+        memcpy(header->au8OemTabId, "VBOX", 4);
+        memcpy(header->au8OemTabId+4, au8Signature, 4);
+    }
     header->u32OemRevision        = RT_H2LE_U32(1);
     memcpy(header->au8CreatorId, pThis->au8CreatorId, 4);
     header->u32CreatorRev         = pThis->u32CreatorRev;
@@ -4667,6 +4672,21 @@ static DECLCALLBACK(int) acpiR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFG
             }
         }
 # endif /* IN_RING3 */
+    }
+
+    /* Optional ACPI OEM Table ID override (8 chars). */
+    {
+        char szOemTabId[32];
+        rc = pHlp->pfnCFGMQueryStringDef(pCfg, "AcpiOemTabId", szOemTabId, sizeof(szOemTabId), "");
+        if (RT_FAILURE(rc))
+            return PDMDEV_SET_ERROR(pDevIns, rc, N_("Configuration error: Querying \"AcpiOemTabId\" as string failed"));
+        size_t cchOemTabId = strlen(szOemTabId);
+        if (cchOemTabId > 0)
+        {
+            memset(pThis->au8OemTabId, ' ', sizeof(pThis->au8OemTabId));
+            if (cchOemTabId > 8) cchOemTabId = 8;
+            memcpy(pThis->au8OemTabId, szOemTabId, cchOemTabId);
+        }
     }
 
     char szCreatorId[16];

@@ -4019,10 +4019,38 @@ void Host::i_generateMACAddress(Utf8Str &mac)
      * vendor ID (080027). The remaining 3 bytes will be taken from the
      * start of a GUID. This is a fairly safe algorithm.
      */
+    const char *pszUseHostOui = RTEnvGet("VBOX_USE_HOST_OUI");
+    bool fUseHostOui = pszUseHostOui && *pszUseHostOui && *pszUseHostOui != '0';
+    uint8_t abOui[3] = { 0x08, 0x00, 0x27 }; /* default VirtualBox OUI */
+
+#ifdef VBOX_WITH_HOSTNETIF_API
+    if (fUseHostOui)
+    {
+        HostNetworkInterfaceList ifs;
+        int vrc = HostNetworkInterface::i_getInterfaces(ifs);
+        if (RT_SUCCESS(vrc))
+        {
+            for (HostNetworkInterfaceList::const_iterator it = ifs.begin(); it != ifs.end(); ++it)
+            {
+                RTMAC macIf = (*it)->i_macAddress();
+                if (RT_MAKE_U32_FROM_U8(macIf.au8[0], macIf.au8[1], macIf.au8[2], 0) != 0)
+                {
+                    abOui[0] = macIf.au8[0];
+                    abOui[1] = macIf.au8[1];
+                    abOui[2] = macIf.au8[2];
+                    break;
+                }
+            }
+        }
+    }
+#else
+    RT_NOREF(fUseHostOui);
+#endif
+
     Guid guid;
     guid.create();
-    mac = Utf8StrFmt("080027%02X%02X%02X",
-                     guid.raw()->au8[0], guid.raw()->au8[1], guid.raw()->au8[2]);
+    mac = Utf8StrFmt("%02X%02X%02X%02X%02X%02X",
+                     abOui[0], abOui[1], abOui[2], guid.raw()->au8[0], guid.raw()->au8[1], guid.raw()->au8[2]);
 }
 
 /**
